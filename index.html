@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>haide0309 的卡牌收藏</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>haide0309 的卡牌收藏</h1>
+    <select id="owner" aria-label="卡主"></select>
+  </div>
+  <span id="snapshot-note" class="snapshot-note" hidden></span>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-cards" aria-selected="true" data-view="cards">卡牌</button>
+    <button role="tab" id="tab-stats" aria-selected="false" data-view="stats">统计</button>
+  </nav>
+</header>
+
+<main>
+  <section id="view-cards">
+    <div class="filters">
+      <input id="q" type="search" placeholder="搜索角色 / 系列 / 卡号" aria-label="搜索">
+      <select id="f-source" aria-label="来源"><option value="">全部来源</option></select>
+      <select id="f-rarity" class="col-lumina" aria-label="稀有度"><option value="">全部稀有度</option></select>
+      <select id="f-limited" class="col-lumina" aria-label="限定">
+        <option value="">限定 / 常驻</option>
+        <option value="1">只看 Limited</option>
+        <option value="0">只看常驻</option>
+      </select>
+      <select id="f-edition" class="col-karuta" aria-label="Edition"><option value="">全部 Edition</option></select>
+      <select id="f-condition" class="col-karuta" aria-label="品相"><option value="">全部品相</option></select>
+      <select id="f-tag" aria-label="Tag">
+        <option value="">全部 Tag</option>
+        <option value="none">未分类</option>
+      </select>
+      <select id="f-image" aria-label="图片">
+        <option value="">全部图片状态</option>
+        <option value="1">有图片</option>
+        <option value="0">缺图片</option>
+      </select>
+      <label class="check"><input id="f-favorite" type="checkbox"> 只看收藏</label>
+      <label class="check"><input id="f-stale" type="checkbox"> 标注待确认</label>
+      <button id="reset" class="ghost" type="button">清除筛选</button>
+      <span class="sort-control">
+        <select id="sort" aria-label="排序字段">
+          <option value="print_number">按 Print</option>
+          <option value="position">按收藏位置</option>
+          <option value="rarity">按稀有度</option>
+          <option value="edition">按 Edition</option>
+          <option value="condition_stars">按品相</option>
+          <option value="wishlist">按 Wishlist</option>
+          <option value="effort">按 Effort</option>
+          <option value="character">按角色</option>
+          <option value="series">按系列</option>
+          <option value="card_code">按卡号</option>
+          <option value="updated_at">按最近扫描</option>
+        </select>
+        <button id="dir" type="button" aria-label="切换升序/降序">↑</button>
+      </span>
+      <div class="segmented" role="group" aria-label="显示方式">
+        <button type="button" data-layout="gallery" aria-pressed="true">图片墙</button>
+        <button type="button" data-layout="table" aria-pressed="false">表格</button>
+      </div>
+      <a id="export" class="button" href="/api/export.csv">导出 CSV</a>
+    </div>
+    <div id="chips" class="chips" hidden></div>
+
+    <div id="bulk" class="bulk" hidden>
+      <span id="bulk-count"></span>
+      <select id="bulk-tag" aria-label="批量设置 Tag"><option value="__">设置 Tag…</option><option value="">（清除 Tag）</option></select>
+      <button id="bulk-fav" type="button">收藏</button>
+      <button id="bulk-unfav" type="button">取消收藏</button>
+      <button id="bulk-clear" class="ghost" type="button">取消选择</button>
+    </div>
+
+    <div id="gallery" class="gallery"></div>
+    <p id="gallery-empty" class="empty" hidden>没有符合条件的卡牌</p>
+
+    <div id="table-wrap" class="table-wrap" hidden>
+      <table id="cards">
+        <thead>
+          <tr>
+            <th class="col-select"><input id="select-all" type="checkbox" aria-label="全选本页"></th>
+            <th class="col-fav" aria-label="收藏">♥</th>
+            <th data-sort="source" class="col-both">来源</th>
+            <th data-sort="card_code">卡号 / 位置</th>
+            <th data-sort="character">角色</th>
+            <th data-sort="series">系列</th>
+            <th data-sort="print_number" class="num col-karuta">Print</th>
+            <th data-sort="edition" class="num col-karuta">Ed</th>
+            <th data-sort="condition_stars" class="col-karuta">品相</th>
+            <th data-sort="rarity" class="col-lumina">稀有度</th>
+            <th data-sort="wishlist" class="num col-karuta">WL</th>
+            <th data-sort="effort" class="num col-karuta">Effort</th>
+            <th>Tag</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="empty" class="empty" hidden>没有符合条件的卡牌</p>
+    </div>
+
+    <div class="pager">
+      <span class="pager-left">
+        <span id="summary"></span>
+        <button id="select-page" class="ghost" type="button">选择本页</button>
+      </span>
+      <div>
+        <select id="page-size" aria-label="每页数量">
+          <option>25</option><option selected>50</option><option>100</option><option>200</option>
+        </select>
+        <button id="prev" type="button">上一页</button>
+        <span id="page-info"></span>
+        <button id="next" type="button">下一页</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-stats" hidden>
+    <div class="tiles" id="tiles"></div>
+    <p class="hint">点击任意柱条可跳转到对应卡牌列表</p>
+    <div class="charts">
+      <figure class="chart"><figcaption>Edition 分布</figcaption><div id="chart-edition"></div></figure>
+      <figure class="chart"><figcaption>品相分布（Karuta）</figcaption><div id="chart-condition"></div></figure>
+      <figure class="chart"><figcaption>稀有度分布（Lumina）</figcaption><div id="chart-rarity"></div></figure>
+      <figure class="chart"><figcaption>Banner 分布（Lumina）</figcaption><div id="chart-banner"></div></figure>
+      <figure class="chart"><figcaption>Print 区间</figcaption><div id="chart-print"></div></figure>
+      <figure class="chart"><figcaption>Tag 分类</figcaption><div id="chart-tag"></div></figure>
+      <figure class="chart wide"><figcaption>卡牌最多的系列（前 10）</figcaption><div id="chart-series"></div></figure>
+    </div>
+  </section>
+</main>
+
+<dialog id="card-dialog" aria-labelledby="dlg-character">
+  <form method="dialog" class="dlg-close"><button aria-label="关闭">✕</button></form>
+  <div class="dlg-body">
+    <div class="dlg-image"></div>
+    <div class="dlg-info">
+      <h2 id="dlg-character"></h2>
+      <p class="dlg-series"></p>
+      <dl class="dlg-meta"></dl>
+      <div class="dlg-edit">
+        <label>Tag <select id="dlg-tag"></select></label>
+        <button id="dlg-fav" type="button" class="fav-btn" aria-pressed="false"></button>
+      </div>
+      <label class="dlg-notes-label" for="dlg-notes">备注</label>
+      <textarea id="dlg-notes" rows="3" maxlength="2000" placeholder="添加备注"></textarea>
+      <div class="dlg-actions">
+        <button id="dlg-copy" type="button">复制 k!view 命令</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div id="tooltip" class="tooltip" role="status" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script>window.KARUTA_STATIC = true;</script>
+<script src="app.js"></script>
+</body>
+</html>
