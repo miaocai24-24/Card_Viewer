@@ -43,6 +43,7 @@
       </select>
       <label class="check"><input id="f-favorite" type="checkbox"> 只看收藏</label>
       <label class="check"><input id="f-stale" type="checkbox"> 标注待确认</label>
+      <label class="check"><input id="f-missing" type="checkbox"> 已离开收藏</label>
       <button id="reset" class="ghost" type="button">清除筛选</button>
       <span class="sort-control">
         <select id="sort" aria-label="排序字段">
@@ -56,6 +57,7 @@
           <option value="character">按角色</option>
           <option value="series">按系列</option>
           <option value="card_code">按卡号</option>
+          <option value="source">按来源</option>
           <option value="updated_at">按最近扫描</option>
         </select>
         <button id="dir" type="button" aria-label="切换升序/降序">↑</button>
@@ -143,6 +145,7 @@
       <h2 id="dlg-character"></h2>
       <p class="dlg-series"></p>
       <dl class="dlg-meta"></dl>
+      <p id="dlg-stale" class="dlg-stale" hidden></p>
       <div class="dlg-edit">
         <label>Tag <select id="dlg-tag"></select></label>
         <button id="dlg-fav" type="button" class="fav-btn" aria-pressed="false"></button>

@@ -281,3 +281,10 @@ body.readonly .tile-actions::after,
 body.readonly td .tag-cell::after { content: attr(data-tag); font-size: 12px; color: var(--ink-2); }
 
 .tag-text { font-size: 12px; color: var(--ink-2); }
+
+.gone {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px;
+  background: var(--surface-2); color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.tile-info .gone { margin: 4px 0 0; align-self: flex-start; }
+.dlg-stale { margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--track); color: var(--accent-ink); font-size: 12px; }

@@ -87,6 +87,7 @@ function staticMatches(card, f) {
   if (f.tag === "none" ? card.tag != null : f.tag && card.tag !== f.tag) return false;
   if (f.favorite === "1" && !card.favorite) return false;
   if (f.stale === "1" && !card.annotation_stale) return false;
+  if (f.missing === "1" ? !card.missing_since : card.missing_since) return false;
   if (f.has_image === "1" && !card.image_url) return false;
   if (f.has_image === "0" && card.image_url) return false;
   return true;
@@ -187,6 +188,7 @@ function currentFilters() {
   if ($("#f-limited").value) f.limited = $("#f-limited").value;
   if ($("#f-image").value) f.has_image = $("#f-image").value;
   if ($("#f-stale").checked) f.stale = "1";
+  if ($("#f-missing").checked) f.missing = "1";
   if ($("#f-favorite").checked) f.favorite = "1";
   return f;
 }
@@ -214,6 +216,12 @@ function limitedBadge(card) {
   if (card.source !== "lumina" || !card.limited) return null;
   return el("span", { class: "limited", title: card.banner ? `限定 banner：${card.banner}` : "限定卡" },
     card.banner || "Limited");
+}
+
+function missingBadge(card) {
+  if (!card.missing_since) return null;
+  return el("span", { class: "gone", title: `${new Date(card.missing_since).toLocaleString()} 的完整扫描中，这个位置已不在收藏里` },
+    "已离开收藏");
 }
 
 function staleBadge(card) {
@@ -325,9 +333,26 @@ const KARUTA_SORTS = ["print_number", "edition", "condition_stars", "wishlist", 
 const LUMINA_SORTS = ["position", "rarity", "art_number"];
 
 function sortForSource(source) {
-  if (source === "lumina" && KARUTA_SORTS.includes(state.sort)) return "position";
+  if (source === "lumina" && (KARUTA_SORTS.includes(state.sort) || state.sort === "card_code")) return "position";
   if (source === "karuta" && LUMINA_SORTS.includes(state.sort)) return "print_number";
   return null;
+}
+
+/** 切换来源后：排序换成该来源有意义的字段，并清掉另一来源那些已被隐藏的筛选。 */
+function applySourceChange() {
+  const source = $("#f-source").value;
+  const next = sortForSource(source);
+  if (next) {
+    state.sort = next;
+    state.dir = "asc";
+  }
+  if (source === "lumina") {
+    $("#f-edition").value = "";
+    $("#f-condition").value = "";
+  } else if (source === "karuta") {
+    $("#f-rarity").value = "";
+    $("#f-limited").value = "";
+  }
 }
 
 function renderCards() {
@@ -363,7 +388,8 @@ function renderCards() {
     if (active) th.setAttribute("aria-sort", state.dir === "asc" ? "ascending" : "descending");
     else th.removeAttribute("aria-sort");
   }
-  $("#sort").value = state.sort;
+  // 表头点出来的字段可能不在下拉框里（如 source / card_code），此时不要让下拉框变空白
+  $("#sort").value = [...$("#sort").options].some((o) => o.value === state.sort) ? state.sort : "";
   $("#dir").textContent = state.dir === "asc" ? "↑" : "↓";
   $("#dir").title = state.dir === "asc" ? "升序（点击切换为降序）" : "降序（点击切换为升序）";
   renderChips();
@@ -372,9 +398,9 @@ function renderCards() {
 
 function renderRow(card) {
   const selected = state.selected.has(card.id);
-  const tr = el("tr", { class: selected ? "selected" : "" });
+  const tr = el("tr", { class: selected ? "selected" : "", dataset: { code: String(card.id) } });
 
-  const check = el("input", { type: "checkbox", "aria-label": `选择 ${card.card_code}` });
+  const check = el("input", { type: "checkbox", "aria-label": `选择 ${cardLabel(card)}` });
   check.checked = selected;
   check.addEventListener("change", () => {
     check.checked ? state.selected.add(card.id) : state.selected.delete(card.id);
@@ -393,7 +419,7 @@ function renderRow(card) {
   code.addEventListener("click", () => copyText(cardLabel(card)));
 
   const dot = tagDot(card.tag);
-  const tagSelect = el("select", { "aria-label": `${card.card_code} 的 Tag` }, tagOptions());
+  const tagSelect = el("select", { "aria-label": `${cardLabel(card)} 的 Tag` }, tagOptions());
   tagSelect.value = card.tag || "";
   tagSelect.addEventListener("change", async () => {
     const updated = await saveCard(card, { tag: tagSelect.value || null });
@@ -401,7 +427,7 @@ function renderRow(card) {
     else tagSelect.value = card.tag || "";
   });
 
-  const notes = el("input", { class: "notes", type: "text", maxlength: 2000, placeholder: "添加备注", "aria-label": `${card.card_code} 的备注` });
+  const notes = el("input", { class: "notes", type: "text", maxlength: 2000, placeholder: "添加备注", "aria-label": `${cardLabel(card)} 的备注` });
   notes.value = card.notes || "";
   const saveNotes = async () => {
     if ((notes.value.trim() || null) === (card.notes || null)) return;
@@ -423,7 +449,8 @@ function renderRow(card) {
     el("td", { class: "col-fav" }, fav),
     el("td", { class: "src col-both" }, SOURCE_LABEL[card.source] || card.source),
     el("td", {}, code),
-    el("td", { class: "character", title: card.character }, card.character, limitedBadge(card), staleBadge(card)),
+    el("td", { class: "character", title: card.character }, card.character, limitedBadge(card),
+      missingBadge(card), staleBadge(card)),
     el("td", { class: "series", title: card.series }, card.series),
     numCell(card.print_number, "col-karuta"),
     el("td", { class: "num col-karuta" }, card.edition == null ? "—" : `◈${card.edition}`),
@@ -442,7 +469,7 @@ function renderTile(card) {
   const selected = state.selected.has(card.id);
   const tile = el("article", { class: selected ? "tile-card selected" : "tile-card", dataset: { code: String(card.id) } });
 
-  const check = el("input", { type: "checkbox", class: "tile-select", "aria-label": `选择 ${card.card_code}` });
+  const check = el("input", { type: "checkbox", class: "tile-select", "aria-label": `选择 ${cardLabel(card)}` });
   check.checked = selected;
   check.addEventListener("change", () => {
     check.checked ? state.selected.add(card.id) : state.selected.delete(card.id);
@@ -450,7 +477,7 @@ function renderTile(card) {
     renderBulk();
   });
 
-  const art = el("button", { class: "tile-art", type: "button", "aria-label": `查看 ${card.character} (${card.card_code}) 详情` },
+  const art = el("button", { class: "tile-art", type: "button", "aria-label": `查看 ${card.character} (${cardLabel(card)}) 详情` },
     cardImage(card, `${card.character} · ${card.series}`) || placeholder(card));
   art.addEventListener("click", () => openCardDialog(card));
 
@@ -463,7 +490,7 @@ function renderTile(card) {
 
   const dot = tagDot(card.tag);
   const tagText = STATIC ? el("span", { class: "tag-text" }, card.tag || "无 Tag") : null;
-  const tagSelect = el("select", { "aria-label": `${card.card_code} 的 Tag` }, tagOptions("无 Tag"));
+  const tagSelect = el("select", { "aria-label": `${cardLabel(card)} 的 Tag` }, tagOptions("无 Tag"));
   tagSelect.value = card.tag || "";
   tagSelect.addEventListener("change", async () => {
     const updated = await saveCard(card, { tag: tagSelect.value || null });
@@ -488,6 +515,7 @@ function renderTile(card) {
       el("div", { class: "tile-series", title: card.series }, card.series),
       el("div", { class: "tile-meta", title: conditionName(card.condition_stars) }, meta),
       limitedBadge(card),
+      missingBadge(card),
       staleBadge(card),
       el("div", { class: "tile-actions" }, fav, dot, tagText, tagSelect)),
   );
@@ -527,9 +555,16 @@ function openCardDialog(card) {
        ...common];
   $(".dlg-meta").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
 
+  const warn = $("#dlg-stale");
+  if (warn) {
+    warn.hidden = !card.annotation_stale;
+    warn.textContent = card.annotation_stale
+      ? "这个收藏位置上的卡换过，下面的 Tag / 收藏 / 备注可能不对；确认或修改一次即可消除提示" : "";
+  }
   $("#dlg-tag").replaceChildren(...tagOptions("无 Tag"));
   $("#dlg-tag").value = card.tag || "";
   setFavButton($("#dlg-fav"), card.favorite, true);
+  $("#dlg-copy").textContent = card.source === "lumina" ? "复制 LVIEW 命令" : "复制 k!view 命令";
   $("#dlg-notes").value = card.notes || "";
   if (!dlg.open) dlg.showModal();
 }
@@ -609,6 +644,10 @@ async function saveCard(card, fields) {
     // 请求期间列表可能已重新加载（state.cards 换成了新对象），同步更新当前列表里的同一张卡
     const live = state.cards.find((c) => c.id === updated.id);
     if (live && live !== card) Object.assign(live, updated);
+    if (!updated.annotation_stale) {
+      // 标注已被确认：立即去掉徽标，不用等整页重绘
+      document.querySelectorAll(`[data-code="${CSS.escape(String(updated.id))}"] .stale`).forEach((n) => n.remove());
+    }
     toast("已保存");
     return updated;
   } catch (err) {
@@ -682,6 +721,7 @@ function resetFilters() {
   $("#f-limited").value = "";
   $("#f-favorite").checked = false;
   $("#f-stale").checked = false;
+  $("#f-missing").checked = false;
   state.page = 1;
 }
 
@@ -783,6 +823,8 @@ function renderBars(selector, items, total) {
       resetFilters();
       const { controls = {}, filters = {} } = d.apply();
       for (const [sel, value] of Object.entries(controls)) $(sel).value = String(value);
+      applySourceChange();
+      for (const [sel, value] of Object.entries(controls)) $(sel).value = String(value);  // 清理后重新套用
       state.filters = Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, String(v)]));
       switchView("cards");
     };
@@ -822,15 +864,9 @@ function bindEvents() {
     loadCards();
   };
   $("#q").addEventListener("input", debounce(refilter, 250));
-  $("#f-source").addEventListener("change", (e) => {
-    const next = sortForSource(e.target.value);
-    if (next) {
-      state.sort = next;
-      state.dir = "asc";
-    }
-  });
+  $("#f-source").addEventListener("change", applySourceChange);
   for (const id of ["#f-edition", "#f-condition", "#f-tag", "#f-image", "#f-favorite",
-                    "#f-source", "#f-rarity", "#f-stale", "#f-limited"]) {
+                    "#f-source", "#f-rarity", "#f-stale", "#f-limited", "#f-missing"]) {
     $(id).addEventListener("change", refilter);
   }
   $("#reset").addEventListener("click", () => {
@@ -840,8 +876,11 @@ function bindEvents() {
 
   for (const th of document.querySelectorAll("th[data-sort]")) {
     th.addEventListener("click", () => {
-      if (state.sort === th.dataset.sort) setSort(state.sort, state.dir === "asc" ? "desc" : "asc");
-      else setSort(th.dataset.sort);
+      // Lumina 的 card_code 是字符串（#1, #10, #100…），按位置排序才符合预期
+      const field = th.dataset.sort === "card_code" && $("#f-source").value === "lumina"
+        ? "position" : th.dataset.sort;
+      if (state.sort === field) setSort(field, state.dir === "asc" ? "desc" : "asc");
+      else setSort(field);
     });
   }
   $("#sort").addEventListener("change", (e) => setSort(e.target.value));
